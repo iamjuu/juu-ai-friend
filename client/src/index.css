@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Fraunces", "Noto Sans Malayalam", serif;
+  --font-sans: "Nunito", "Noto Sans Malayalam", system-ui, sans-serif;
+  --color-cream: #fff7ed;
+  --color-sand: #ffedd5;
+  --color-terracotta: #c2410c;
+  --color-ember: #ea580c;
+  --color-gold: #f59e0b;
+  --color-plum: #7c2d12;
+  --color-ink: #1c1410;
+  --color-teal: #0f766e;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: #1c1410;
+  color: #1c1410;
+}
+
+.dark body,
+html.dark body {
+  color: #fff7ed;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(194, 65, 12, 0.35);
+  border-radius: 999px;
+}
+
+.orb-idle {
+  animation: breathe 4.6s ease-in-out infinite;
+}
+
+.orb-listen {
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+
+.orb-think {
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 28px rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    filter: hue-rotate(0deg) brightness(1);
+  }
+  50% {
+    filter: hue-rotate(20deg) brightness(1.15);
+  }
+  100% {
+    filter: hue-rotate(0deg) brightness(1);
+  }
+}
+
+.wave-bar {
+  transform-origin: center bottom;
+  animation: wave 1s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

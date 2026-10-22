@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+ai-services/.venv/
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Models and caches
+*.pt
+*.bin
+*.onnx
+*.gguf
+ai-services/models/cache/
+ai-services/tmp/
+uploads/
+tmp/
+*.wav
+*.mp3
+*.webm
+!client/public/**
+
+# Logs and OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build
+client/dist/
+dist/
+.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp

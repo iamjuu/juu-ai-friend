@@ -1,0 +1,27 @@
+{
+  "name": "juu-mowlee-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Juu Mowlee Express API — conversation, Gemini, and speech coordination",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "form-data": "^4.0.4",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.19.1",
+    "morgan": "^1.10.1",
+    "msedge-tts": "^2.1.0",
+    "multer": "^2.0.2"
+  }
+}
