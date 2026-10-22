@@ -1,10 +1,10 @@
 const Conversation = require('../models/Conversation');
-const Preferences = require('../models/Preferences');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { chatWithLlm } = require('../services/llm');
 const { synthesizeSpeech } = require('../services/speech');
 const { detectSpeakingStyle, descriptionForStyle } = require('../services/emotion');
 const { WELCOME } = require('./conversationController');
+const { getOrCreate } = require('./preferencesController');
 
 function titleFromText(text) {
   const compact = (text || '').replace(/\s+/g, ' ').trim();
@@ -13,11 +13,7 @@ function titleFromText(text) {
 }
 
 async function loadPreferences() {
-  return Preferences.findOneAndUpdate(
-    { userId: 'local' },
-    {},
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+  return getOrCreate();
 }
 
 const chat = asyncHandler(async (req, res) => {
@@ -99,7 +95,6 @@ const chat = asyncHandler(async (req, res) => {
   if (conversation.messages.filter((msg) => msg.role === 'user').length === 1) {
     conversation.title = titleFromText(text);
   }
-  await conversation.save();
 
   const payload = {
     conversationId: conversation.id,
@@ -110,6 +105,7 @@ const chat = asyncHandler(async (req, res) => {
     voice,
   };
 
+  const saveJob = conversation.save();
   if (speak) {
     try {
       const audio = await synthesizeSpeech({
@@ -127,6 +123,7 @@ const chat = asyncHandler(async (req, res) => {
       payload.ttsError = err.publicMessage || 'ശബ്ദം ഉണ്ടാക്കാൻ കഴിഞ്ഞില്ല.';
     }
   }
+  await saveJob;
 
   res.json(payload);
 });

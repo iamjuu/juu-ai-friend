@@ -12,20 +12,20 @@ export default function Sidebar({
 }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-30 flex w-80 flex-col border-r border-orange-200/60 bg-orange-50/95 p-4 backdrop-blur-xl transition-transform dark:border-orange-950/50 dark:bg-stone-950/95 md:static md:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-30 flex w-80 flex-col border-r border-emerald-200/40 bg-emerald-50/90 p-5 backdrop-blur-2xl transition-transform dark:border-emerald-950/40 dark:bg-[#0c1410]/90 md:static md:translate-x-0 ${
         open ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="font-display text-2xl font-semibold text-orange-800 dark:text-orange-200">
+          <p className="font-display text-2xl font-semibold text-emerald-800 dark:text-emerald-200">
             {APP_NAME}
           </p>
-          <p className="text-sm text-stone-500 dark:text-orange-100/60">{TAGLINE}</p>
+          <p className="text-sm text-stone-500 dark:text-emerald-100/60">{TAGLINE}</p>
         </div>
         <button
           type="button"
-          className="rounded-full p-2 hover:bg-orange-100 md:hidden dark:hover:bg-stone-800"
+          className="rounded-full p-2 hover:bg-emerald-100 md:hidden dark:hover:bg-stone-800"
           onClick={onClose}
           aria-label="Close history"
         >
@@ -36,7 +36,7 @@ export default function Sidebar({
       <button
         type="button"
         onClick={onCreate}
-        className="mb-4 flex items-center justify-center gap-2 rounded-2xl bg-orange-600 px-4 py-3 font-semibold text-white shadow-lg shadow-orange-700/20 hover:bg-orange-500"
+        className="mb-4 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 font-semibold text-white shadow-lg shadow-emerald-900/30 hover:from-emerald-400 hover:to-teal-500"
       >
         <MessageSquarePlus size={18} />
         New conversation
@@ -51,7 +51,7 @@ export default function Sidebar({
               key={item.id}
               className={`group flex items-start gap-2 rounded-2xl border p-3 ${
                 activeId === item.id
-                  ? 'border-orange-300 bg-white dark:border-orange-800 dark:bg-stone-900'
+                  ? 'border-emerald-300 bg-white dark:border-emerald-800 dark:bg-stone-900'
                   : 'border-transparent hover:bg-white/70 dark:hover:bg-stone-900/70'
               }`}
             >
@@ -60,8 +60,8 @@ export default function Sidebar({
                 className="min-w-0 flex-1 text-left"
                 onClick={() => onSelect(item.id)}
               >
-                <p className="truncate font-semibold text-stone-800 dark:text-orange-50">{item.title}</p>
-                <p className="truncate text-xs text-stone-500 dark:text-orange-100/50">{item.preview}</p>
+                <p className="truncate font-semibold text-stone-800 dark:text-emerald-50">{item.title}</p>
+                <p className="truncate text-xs text-stone-500 dark:text-emerald-100/50">{item.preview}</p>
               </button>
               <button
                 type="button"

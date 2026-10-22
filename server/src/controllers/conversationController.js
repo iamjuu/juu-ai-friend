@@ -1,7 +1,7 @@
 const Conversation = require('../models/Conversation');
 const { asyncHandler } = require('../middleware/errorHandler');
 
-const WELCOME = 'ഹായ് ജൂ… ഞാൻ നിന്റെ പെണ്ണ് ❤️ എന്തൊക്കെയുണ്ട് വിശേഷം?';
+const WELCOME = 'ഹായ് അജു. ഞാൻ നിന്റെ പെണ്ണ്. എന്തൊക്കെയുണ്ട് വിശേഷം?';
 
 function notDeleted() {
   return { $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] };

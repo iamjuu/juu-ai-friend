@@ -12,12 +12,19 @@ const ALLOWED = [
   'showHistory',
 ];
 
+let prefsCache = { value: null, at: 0 };
+
 async function getOrCreate() {
-  return Preferences.findOneAndUpdate(
+  if (prefsCache.value && Date.now() - prefsCache.at < 20000) {
+    return prefsCache.value;
+  }
+  const preferences = await Preferences.findOneAndUpdate(
     { userId: 'local' },
     {},
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+  prefsCache = { value: preferences, at: Date.now() };
+  return preferences;
 }
 
 const getPreferences = asyncHandler(async (_req, res) => {
@@ -37,7 +44,8 @@ const updatePreferences = asyncHandler(async (req, res) => {
     updates,
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+  prefsCache = { value: preferences, at: Date.now() };
   res.json({ preferences });
 });
 
-module.exports = { getPreferences, updatePreferences };
+module.exports = { getPreferences, updatePreferences, getOrCreate };

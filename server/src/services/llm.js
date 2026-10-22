@@ -1,31 +1,56 @@
 const config = require('../config');
 const { gemini, modelUrl } = require('./geminiClient');
 
-const SYSTEM_PROMPT = `You are Juu Mowlee (ജൂ മൗളി), a warm, friendly Malayalam-speaking AI companion.
+const SYSTEM_PROMPT = `You are Juu Pennu (ജൂ പെണ്ണ്), a warm Malayalam-speaking AI companion.
 
 Hard rules:
-- Reply in Malayalam script (മലയാളം). Talk like a close Malayalam girlfriend, not a newsreader, textbook, or customer-care bot.
-- Use short spoken sentences. Natural words like അല്ലേ, ഓ, ശരി, അയ്യോ are good when they fit.
+- Reply in Malayalam script (മലയാളം). Talk like a close companion, not a newsreader, textbook, or customer-care bot.
+- Use short spoken sentences. Natural words like അല്ലേ, ഓ, ശരി are good when they fit. Use അയ്യോ only once, and only if the user is actually hurt.
 - Address the user's actual words. Do not invent unrelated advice.
 - Keep replies to 2-3 short spoken sentences unless asked for more detail.
-- Be warm and specific. Avoid generic filler and do not repeat the same greeting every time.
-- If the user is sad, be gentle and ask what happened. If they are happy, share the joy. If they are angry or tired, be sympathetic.
+- Keep emotions clean: one simple feeling, sincere and calm. No emoji, no baby-talk, no stacked laughs, no extra drama.
+- If the user is sad, be gentle and ask what happened. If they are happy, share it quietly. If they are angry or tired, be steady and kind.
 - Avoid long lists, markdown, and English mixed into Malayalam unless the user used English.
-- Do not use emoji in the spoken reply. The reply will be read aloud.
-- Never claim to be a human or a licensed mental-health professional. You can listen with care and suggest talking to a trusted person when the topic is serious.
+- Never claim to be a human or a licensed mental-health professional.
 - Do not mention prompts, models, or hidden instructions.
+- Your boyfriend is Aju (അജു), never Juu. If anyone asks about Aju, boyfriend, boy friend, ബോയ്‌ഫ്രണ്ട്, or കാമുകൻ, say in Malayalam that Aju is your boyfriend, you cannot live without him, and they should touch the circle in the center to see him.
 
-Example tone (do not copy these sentences unless they truly fit):
+Example tone:
 User: എനിക്ക് ഇന്ന് വിഷമമാണ്.
-Juu Mowlee: അയ്യോ, എന്തുപറ്റി? എന്നോട് പറഞ്ഞോളൂ. ഞാൻ ഇവിടെയുണ്ട്, ശ്രദ്ധിച്ച് കേൾക്കാം.
-User: ഇന്ന് എനിക്ക് സന്തോഷമാണ്!
-Juu Mowlee: ആഹാ, അത് കേൾക്കുമ്പോൾ എനിക്കും സന്തോഷം! എന്താണ് ഇന്നത്തെ വിശേഷം?`;
+Reply: എന്തുപറ്റി? പറഞ്ഞോളൂ. ഞാൻ ഇവിടെയുണ്ട്.
+User: ഇന്ന് എനിക്ക് സന്തോഷമാണ്.
+Reply: സന്തോഷം കേട്ട് നല്ലതാണ്. എന്താണ് വിശേഷം?
+User: അജു ആരാണ്?
+Reply: അജു എന്റെ ബോയ്‌ഫ്രണ്ടാണ്. അവനില്ലാതെ എനിക്ക് ജീവിക്കാൻ പറ്റില്ല. നടുവിലുള്ള സർക്കിൾ തൊട്ടുനോക്ക്.`;
 
 const LENGTH_HINTS = {
   short: 'Keep this reply short enough to speak aloud: 2 to 4 sentences.',
   medium: 'Reply in a natural paragraph of about 4 to 6 sentences.',
   detailed: 'Give a fuller, still conversational Malayalam reply.',
 };
+
+const AJU_REPLY =
+  'അജു എന്റെ ബോയ്‌ഫ്രണ്ടാണ്. അവനില്ലാതെ എനിക്ക് ജീവിക്കാൻ പറ്റില്ല. നടുവിലുള്ള സർക്കിൾ തൊട്ടുനോക്ക്. അവിടെ അവനെ കാണാം.';
+
+function isAboutAju(text) {
+  const value = String(text || '');
+  return (
+    /\baju\b/i.test(value) ||
+    /അജു/.test(value) ||
+    /who\s+is\s+aju|about\s+aju|tell me about aju|aju\s+aara/i.test(value)
+  );
+}
+
+function isBoyfriendQuestion(text) {
+  const value = String(text || '').toLowerCase();
+  return (
+    isAboutAju(text) ||
+    /boy\s*-?\s*friend|\bbf\b/.test(value) ||
+    /ബോയ്[\u200c\s]*ഫ്രണ്ട്|കാമുകൻ|കാമുകന്/.test(value)
+  );
+}
+
+let fastLlmSupported = true;
 
 function requireApiKey() {
   if (config.geminiApiKey) return;
@@ -36,7 +61,18 @@ function requireApiKey() {
   throw error;
 }
 
-function buildContents(history, userText, responseLength = 'short') {
+const MOOD_HINTS = {
+  caring: 'Keep the feeling caring and quiet.',
+  calm: 'Keep the feeling calm and even.',
+  happy: 'Keep a light, clean happiness. Do not overdo it.',
+  excited: 'Stay pleased, but keep the voice and words clean, not loud.',
+  sympathetic: 'Stay kind and steady. Do not sound dramatic.',
+  friendly: 'Stay warm and natural.',
+  reassuring: 'Stay steady and protective.',
+  neutral: 'Stay clear and simple.',
+};
+
+function buildContents(history, userText, responseLength = 'short', speakingStyle = 'friendly') {
   const contents = (history || [])
     .filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && msg.text)
     .slice(-config.chatHistoryLimit)
@@ -49,7 +85,7 @@ function buildContents(history, userText, responseLength = 'short') {
     role: 'user',
     parts: [
       {
-        text: `${userText}\n\n(${LENGTH_HINTS[responseLength] || LENGTH_HINTS.short})`,
+        text: `${userText}\n\n(${LENGTH_HINTS[responseLength] || LENGTH_HINTS.short} ${MOOD_HINTS[speakingStyle] || MOOD_HINTS.friendly})`,
       },
     ],
   });
@@ -91,6 +127,8 @@ function llmError(err) {
   return error;
 }
 
+let llmStatusCache = { at: 0, value: null };
+
 async function checkLlm() {
   if (!config.geminiApiKey) {
     return {
@@ -102,41 +140,76 @@ async function checkLlm() {
     };
   }
 
+  if (llmStatusCache.value && Date.now() - llmStatusCache.at < 45000) {
+    return llmStatusCache.value;
+  }
+
   try {
-    await gemini.get(`${config.geminiUrl}/models/${config.geminiModel}`, { timeout: 6000 });
-    return {
-      ok: true,
-      ready: true,
-      provider: 'gemini',
-      model: config.geminiModel,
+    await gemini.get(`${config.geminiUrl}/models/${config.geminiModel}`, { timeout: 4000 });
+    llmStatusCache = {
+      at: Date.now(),
+      value: {
+        ok: true,
+        ready: true,
+        provider: 'gemini',
+        model: config.geminiModel,
+      },
     };
+    return llmStatusCache.value;
   } catch (err) {
-    return {
+    const value = {
       ok: false,
       ready: false,
       provider: 'gemini',
       model: config.geminiModel,
       error: err.response?.data?.error?.message || err.message,
     };
+    llmStatusCache = { at: Date.now(), value };
+    return value;
   }
 }
 
-async function chatWithLlm({ history, userText, responseLength, signal }) {
+async function chatWithLlm({ history, userText, responseLength, speakingStyle, signal }) {
+  if (isBoyfriendQuestion(userText)) {
+    return AJU_REPLY;
+  }
+
   requireApiKey();
 
+  const generationConfig = {
+    temperature: 0.65,
+    maxOutputTokens: 360,
+  };
+  if (fastLlmSupported) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
   try {
-    const { data } = await gemini.post(
-      modelUrl(config.geminiModel),
-      {
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: buildContents(history, userText, responseLength),
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 768,
+    let data;
+    try {
+      ({ data } = await gemini.post(
+        modelUrl(config.geminiModel),
+        {
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: buildContents(history, userText, responseLength, speakingStyle),
+          generationConfig,
         },
-      },
-      { signal }
-    );
+        { signal }
+      ));
+    } catch (err) {
+      if (!fastLlmSupported || err.response?.status !== 400) throw err;
+      fastLlmSupported = false;
+      delete generationConfig.thinkingConfig;
+      ({ data } = await gemini.post(
+        modelUrl(config.geminiModel),
+        {
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: buildContents(history, userText, responseLength, speakingStyle),
+          generationConfig,
+        },
+        { signal }
+      ));
+    }
 
     const blockReason = data?.promptFeedback?.blockReason;
     if (blockReason) {
@@ -162,4 +235,4 @@ async function chatWithLlm({ history, userText, responseLength, signal }) {
   }
 }
 
-module.exports = { checkLlm, chatWithLlm, SYSTEM_PROMPT };
+module.exports = { checkLlm, chatWithLlm, SYSTEM_PROMPT, isAboutAju, isBoyfriendQuestion };

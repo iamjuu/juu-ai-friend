@@ -1,6 +1,6 @@
 export const APP_NAME = 'Juu Pennu'
 export const TAGLINE = "Juu's Malayalam AI girlfriend"
-export const WELCOME = 'ഹായ് ജൂ… ഞാൻ നിന്റെ പെണ്ണ് ❤️ എന്തൊക്കെയുണ്ട് വിശേഷം?'
+export const WELCOME = 'ഹായ് അജു. ഞാൻ നിന്റെ പെണ്ണ്. എന്തൊക്കെയുണ്ട് വിശേഷം?'
 export const WAKE_GREETING = WELCOME
 
 export const VOICE_STATES = {

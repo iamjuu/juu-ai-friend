@@ -5,7 +5,7 @@ import ChatMessage from '../components/ChatMessage'
 import SettingsPanel from '../components/SettingsPanel'
 import Sidebar from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
-import VoiceOrb from '../components/VoiceOrb'
+import ParticleGlobe from '../components/ParticleGlobe'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { api } from '../services/api'
@@ -52,7 +52,8 @@ export default function HomePage() {
     status?.python?.ok ||
       status?.python?.stt_ready ||
       status?.speech?.ok ||
-      status?.speech?.stt_ready
+      status?.speech?.stt_ready ||
+      status?.speech?.tts_ready
   )
   const llmReady = Boolean(status?.llm?.ready)
   const showChat = preferences.showChat !== false
@@ -139,6 +140,7 @@ export default function HomePage() {
       setBusy(true)
       setError('')
       setInput('')
+      player.unlock?.()
       setMessages((current) => [...current, { role: 'user', text: trimmed, timestamp: new Date().toISOString() }])
       console.log('[Juu]', trimmed)
       setVoiceState('thinking')
@@ -148,11 +150,12 @@ export default function HomePage() {
       abortRef.current = controller
 
       try {
+        const wantSpeech = preferences.audioAutoplay !== false
         const data = await api.chat(
           {
             conversationId: activeId,
             text: trimmed,
-            speak: false,
+            speak: Boolean(speak && wantSpeech),
             voice: preferences.preferredVoice,
             speakingStyle: preferences.preferredSpeakingStyle,
             responseLength: preferences.responseLength,
@@ -164,17 +167,19 @@ export default function HomePage() {
         console.log('[Juu Pennu]', data.assistantMessage)
         refreshConversations()
 
-        if ((speak || speechReady) && preferences.audioAutoplay !== false) {
+        if (wantSpeech) {
           setVoiceState('generating_speech')
           try {
-            const audio = await api.synthesize(
-              {
-                text: data.assistantMessage,
-                voice: preferences.preferredVoice,
-                speakingStyle: data.speakingStyle || preferences.preferredSpeakingStyle,
-              },
-              controller.signal
-            )
+            let audio = data.audioBase64
+              ? { audioBase64: data.audioBase64, mimeType: data.audioMimeType || 'audio/wav' }
+              : await api.synthesize(
+                  {
+                    text: data.assistantMessage,
+                    voice: preferences.preferredVoice,
+                    speakingStyle: data.speakingStyle || preferences.preferredSpeakingStyle,
+                  },
+                  controller.signal
+                )
             if (!audio?.audioBase64) {
               throw new Error('Voice generation returned no audio.')
             }
@@ -259,6 +264,7 @@ export default function HomePage() {
     }
 
     try {
+      player.unlock?.()
       player.stop()
       setError('')
       setVoiceState('listening')
@@ -302,8 +308,11 @@ export default function HomePage() {
   }, [error, showChat, voiceState])
 
   return (
-            <div className="min-h-svh bg-gradient-to-br from-orange-100 via-rose-50 to-amber-100 text-stone-900 dark:from-stone-950 dark:via-neutral-950 dark:to-orange-950 dark:text-orange-50">
-      <div className="mx-auto flex min-h-svh max-w-7xl">
+    <div className="juu-shell min-h-svh text-stone-900 dark:text-emerald-50">
+      <div className="float-ball float-ball-a" aria-hidden="true" />
+      <div className="float-ball float-ball-b" aria-hidden="true" />
+      <div className="juu-glass-veil" aria-hidden="true" />
+      <div className="relative z-10 mx-auto flex min-h-svh max-w-7xl">
         {showHistory ? (
           <Sidebar
             open={sidebarOpen}
@@ -316,13 +325,13 @@ export default function HomePage() {
           />
         ) : null}
 
-        <main className="flex min-w-0 flex-1 flex-col px-4 py-4 md:px-8">
-          <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <main className="flex min-w-0 flex-1 flex-col px-4 py-5 md:px-8">
+          <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {showHistory ? (
                 <button
                   type="button"
-                  className="rounded-2xl border border-orange-200 bg-white/70 p-2 md:hidden dark:border-orange-900 dark:bg-stone-900"
+                  className="icon-btn md:hidden"
                   onClick={() => setSidebarOpen(true)}
                   aria-label="Open conversation history"
                 >
@@ -330,15 +339,15 @@ export default function HomePage() {
                 </button>
               ) : null}
               <div>
-                <h1 className="font-display text-3xl text-orange-800 dark:text-orange-200">{APP_NAME}</h1>
-                <p className="text-sm text-stone-500 dark:text-orange-100/60">{TAGLINE}</p>
+                <h1 className="font-display text-4xl tracking-tight text-emerald-900 dark:text-emerald-100">{APP_NAME}</h1>
+                <p className="text-sm text-stone-500 dark:text-emerald-100/55">{TAGLINE}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={status} />
               <button
                 type="button"
-                className="rounded-2xl border border-orange-200 bg-white/70 p-2 dark:border-orange-900 dark:bg-stone-900"
+                className="icon-btn"
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Open settings"
               >
@@ -347,16 +356,18 @@ export default function HomePage() {
             </div>
           </header>
 
-          <section className={`${showChat ? 'mb-4' : 'mb-4 flex-1'} rounded-[2rem] border border-orange-200/70 bg-white/50 p-6 text-center shadow-xl shadow-orange-900/5 dark:border-orange-950/60 dark:bg-stone-900/40`}>
-            <VoiceOrb state={voiceState} />
-            <p className="mt-3 text-sm font-semibold text-stone-600 dark:text-orange-100/70">{stateHint}</p>
-            {error ? <p className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+          <section
+            className={`${showChat ? 'mb-4 min-h-[22rem]' : 'mb-4 flex-1'} flex flex-col items-center justify-center px-2 text-center`}
+          >
+            <ParticleGlobe state={voiceState} />
+            <p className="mt-3 max-w-md text-sm font-medium text-stone-600 dark:text-emerald-100/70">{stateHint}</p>
+            {error ? <p className="mt-2 text-sm text-red-600 dark:text-red-300">{error}</p> : null}
           </section>
 
           {showChat ? (
             <section
               ref={threadRef}
-              className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-[2rem] border border-orange-200/60 bg-white/40 p-4 dark:border-orange-950/50 dark:bg-stone-950/30"
+              className="glass-panel min-h-0 flex-1 space-y-3 overflow-y-auto rounded-[2.2rem] p-4"
             >
               {messages.map((message, index) => (
                 <ChatMessage key={message._id || `${message.role}-${index}-${message.timestamp}`} message={message} />
@@ -364,20 +375,19 @@ export default function HomePage() {
             </section>
           ) : null}
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-4">
             <AudioPlayer
-              playing={player.playing}
-              progress={player.progress}
+              playing={player.playing || voiceState === 'speaking'}
+              analyserRef={player.analyserRef}
               onStop={() => {
                 player.stop()
                 if (voiceState === 'speaking') setVoiceState('idle')
               }}
-              disabled={!player.playing}
             />
 
             {showChat ? (
               <form
-                className="flex items-end gap-2 rounded-[1.8rem] border border-orange-200 bg-white/80 p-2 dark:border-orange-950 dark:bg-stone-900/80"
+                className="glass-panel flex items-end gap-2 rounded-[1.8rem] p-2"
                 onSubmit={(event) => {
                   event.preventDefault()
                   sendText(input)
@@ -399,7 +409,7 @@ export default function HomePage() {
                 />
                 <button
                   type="submit"
-                  className="rounded-2xl bg-orange-600 p-3 text-white disabled:opacity-40"
+                  className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-3 text-white shadow-md shadow-emerald-900/20 disabled:opacity-40"
                   disabled={busy || !input.trim()}
                   aria-label="Send message"
                 >
@@ -408,25 +418,25 @@ export default function HomePage() {
               </form>
             ) : null}
 
-            <div className="flex flex-col items-center gap-2 pb-2">
+            <div className="flex flex-col items-center gap-2 pb-3">
               <button
                 type="button"
                 onClick={handleMic}
                 disabled={busy && !recorder.recording}
-                className={`flex h-20 w-20 items-center justify-center rounded-full text-white shadow-xl transition ${
+                className={`mic-btn flex h-20 w-20 items-center justify-center rounded-full text-white shadow-2xl transition ${
                   recorder.recording
-                    ? 'bg-red-600 shadow-red-700/30'
-                    : 'bg-orange-600 shadow-orange-800/30 hover:bg-orange-500'
+                    ? 'bg-red-600 shadow-red-700/40'
+                    : 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-900/40 hover:from-emerald-400 hover:to-teal-500'
                 } disabled:opacity-40`}
                 aria-label="Talk to Juu Pennu"
               >
                 {recorder.recording ? <MicOff size={32} /> : <Mic size={32} />}
               </button>
-              <p className="text-sm font-bold text-orange-800 dark:text-orange-200">Talk to Juu Pennu</p>
-              <div className="flex gap-2">
+              <p className="text-sm font-bold tracking-wide text-emerald-800 dark:text-emerald-100">Talk to Juu Pennu</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
-                  className="rounded-full px-3 py-1 text-xs font-semibold text-stone-600 hover:bg-white/70 dark:text-orange-100"
+                  className="rounded-full px-3 py-1 text-xs font-semibold text-stone-500 hover:bg-white/20 dark:text-emerald-100/70"
                   onClick={() => abortRef.current?.abort()}
                   disabled={!busy}
                 >
@@ -434,7 +444,7 @@ export default function HomePage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-full px-3 py-1 text-xs font-semibold text-stone-600 hover:bg-white/70 dark:text-orange-100"
+                  className="rounded-full px-3 py-1 text-xs font-semibold text-stone-500 hover:bg-white/20 dark:text-emerald-100/70"
                   onClick={() => {
                     player.stop()
                     setVoiceState('idle')
@@ -445,7 +455,7 @@ export default function HomePage() {
                   </span>
                 </button>
                 {!speechReady ? (
-                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
                     Voice is offline — text chat still works
                   </span>
                 ) : null}

@@ -294,7 +294,8 @@ async function tryGeminiTts({ text, voice, speakingStyle, signal }) {
   const style = STYLE_MAP[speakingStyle] || STYLE_MAP.friendly;
   let lastError = null;
 
-  for (const model of ttsModels()) {
+  const models = ttsModels().slice(0, 1);
+  for (const model of models) {
     try {
       const audio = normalizeAudio(await requestTts(model, { text, geminiVoice, style, signal }));
       if (!audio) {
