@@ -3,20 +3,20 @@ const { gemini, modelUrl } = require('./geminiClient');
 const { synthesizeMalayalam } = require('./malayalamTts');
 
 const VOICE_MAP = {
-  Anjali: 'Kore',
-  Anju: 'Aoede',
+  Anjali: 'Aoede',
+  Anju: 'Leda',
   Harish: 'Puck',
 };
 
 const STYLE_MAP = {
-  caring: 'very gentle, close, slow, and full of warmth, like a friend who cares',
-  calm: 'soft, soothing, and unhurried, with a calm smile in the voice',
-  happy: 'bright, smiling, and cheerful, with a lively lift in pitch',
-  excited: 'excited, delighted, and energetic, a little faster and sparkling',
-  sympathetic: 'tender, aching with kindness, slower, with gentle pauses',
-  friendly: 'warm, playful, and expressive, like a close Malayalam friend',
-  reassuring: 'steady, kind, and protective, with a comforting closeness',
-  neutral: 'clear, natural, and still a little warm',
+  caring: 'gentle, close, and caring, like a friend sitting beside you',
+  calm: 'soft, unhurried, and soothing, with a small warm smile',
+  happy: 'bright and cheerful, still natural, not cartoonish',
+  excited: 'lively and delighted, a little faster but still human',
+  sympathetic: 'tender and kind, slower, with gentle pauses',
+  friendly: 'warm, playful, and close, like a Malayalam friend chatting',
+  reassuring: 'steady, kind, and protective',
+  neutral: 'clear, natural, and a little warm',
 };
 
 function requireApiKey() {
@@ -44,8 +44,12 @@ function speechError(err, fallbackCode, fallbackMessage) {
   throw error;
 }
 
-function speakableText(text, maxChars = 280) {
-  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+function speakableText(text, maxChars = 700) {
+  const compact = String(text || '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
+    .replace(/[*_`#]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (compact.length <= maxChars) return compact;
   const pieces = compact.split(/(?<=[।.!?…\n])\s+/).filter(Boolean);
   let out = '';
@@ -53,7 +57,6 @@ function speakableText(text, maxChars = 280) {
     const next = out ? `${out} ${piece}` : piece;
     if (out && next.length > maxChars) break;
     out = next;
-    if (out.length >= 160 && pieces.indexOf(piece) >= 1) break;
   }
   return out || compact.slice(0, maxChars);
 }
@@ -225,33 +228,45 @@ async function transcribeAudio({ buffer, mimetype, originalname, signal }) {
   }
 }
 
-async function requestTts(model, { text, geminiVoice, style, signal }) {
-  const spoken = speakableText(text);
-  const prompt = style
-    ? `(Read only the Malayalam, with feeling: ${style}.)\n${spoken}`
-    : spoken;
-  const { data } = await gemini.post(
-    modelUrl(model),
-    {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          languageCode: 'ml-IN',
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: geminiVoice },
-          },
+async function postTts(model, { spoken, geminiVoice, style, useSystem, signal }) {
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: spoken }],
+      },
+    ],
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: {
+        languageCode: 'ml-IN',
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: geminiVoice },
         },
       },
     },
-    { signal }
-  );
+  };
+  if (useSystem) {
+    body.systemInstruction = {
+      parts: [
+        {
+          text: `You are a Malayalam text-to-speech voice. Speak only the user text. Sound ${style}. Close, human, conversational. Do not add extra words.`,
+        },
+      ],
+    };
+  }
+  const { data } = await gemini.post(modelUrl(model), body, { signal });
   return extractInlineAudio(data);
+}
+
+async function requestTts(model, { text, geminiVoice, style, signal }) {
+  const spoken = speakableText(text);
+  try {
+    return await postTts(model, { spoken, geminiVoice, style, useSystem: true, signal });
+  } catch (err) {
+    if (err.response?.status !== 400) throw err;
+    return postTts(model, { spoken, geminiVoice, style, useSystem: false, signal });
+  }
 }
 
 const ttsCooldownUntil = new Map();
@@ -267,29 +282,26 @@ function markCooldown(model, err) {
   ttsCooldownUntil.set(model, Date.now() + Math.min(waitMs, 12 * 60 * 60 * 1000));
 }
 
-async function synthesizeSpeech({ text, voice, speakingStyle, signal }) {
-  requireApiKey();
-
-  const geminiVoice = VOICE_MAP[voice] || VOICE_MAP.Anjali;
-  const style = STYLE_MAP[speakingStyle] || STYLE_MAP.friendly;
-  try {
-    return await synthesizeMalayalam({ text, voice, speakingStyle });
-  } catch (err) {
-    console.warn('Malayalam neural TTS failed:', err.message);
-  }
-
-  const models = [config.geminiTtsModel, ...(config.geminiTtsFallbacks || [])].filter(
+function ttsModels() {
+  return [config.geminiTtsModel, ...(config.geminiTtsFallbacks || [])].filter(
     (model, index, list) => model && list.indexOf(model) === index && !isCoolingDown(model)
   );
+}
 
+async function tryGeminiTts({ text, voice, speakingStyle, signal }) {
+  if (!config.geminiApiKey) return null;
+  const geminiVoice = VOICE_MAP[voice] || VOICE_MAP.Anjali;
+  const style = STYLE_MAP[speakingStyle] || STYLE_MAP.friendly;
   let lastError = null;
-  for (const model of models) {
+
+  for (const model of ttsModels()) {
     try {
       const audio = normalizeAudio(await requestTts(model, { text, geminiVoice, style, signal }));
       if (!audio) {
         lastError = new Error('Empty TTS audio');
         continue;
       }
+      console.log('[tts]', `gemini:${model}`, voice || 'Anjali', speakingStyle || 'friendly');
       return {
         audioBase64: audio.audioBase64,
         mimeType: audio.mimeType,
@@ -317,7 +329,31 @@ async function synthesizeSpeech({ text, voice, speakingStyle, signal }) {
     }
   }
 
-  if (!models.length || lastError?.response?.status === 429) {
+  if (lastError) throw lastError;
+  return null;
+}
+
+async function synthesizeSpeech({ text, voice, speakingStyle, signal }) {
+  let lastError = null;
+
+  try {
+    const geminiAudio = await tryGeminiTts({ text, voice, speakingStyle, signal });
+    if (geminiAudio?.audioBase64) return geminiAudio;
+  } catch (err) {
+    lastError = err;
+    console.warn('Gemini TTS unavailable, using Malayalam neural voice:', err.message);
+  }
+
+  try {
+    const audio = await synthesizeMalayalam({ text, voice, speakingStyle });
+    console.log('[tts]', audio.backend, voice || 'Anjali', speakingStyle || 'friendly');
+    return audio;
+  } catch (err) {
+    lastError = err;
+    console.warn('Malayalam neural TTS failed:', err.message);
+  }
+
+  if (lastError?.response?.status === 429) {
     const error = new Error(lastError?.response?.data?.error?.message || lastError?.message || 'TTS quota exceeded');
     error.status = 429;
     error.code = 'tts_rate_limited';

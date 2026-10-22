@@ -42,15 +42,19 @@ export function useAudioPlayer() {
       audio.ontimeupdate = () => {
         if (audio.duration) setProgress(audio.currentTime / audio.duration)
       }
-      audio.onended = () => {
-        setPlaying(false)
-        setProgress(1)
-      }
-      audio.onerror = () => {
-        setPlaying(false)
-      }
       setPlaying(true)
-      await audio.play()
+      await new Promise((resolve, reject) => {
+        audio.onended = () => {
+          setPlaying(false)
+          setProgress(1)
+          resolve()
+        }
+        audio.onerror = () => {
+          setPlaying(false)
+          reject(new Error('Audio playback failed'))
+        }
+        audio.play().catch(reject)
+      })
       return audio
     },
     [cleanup]

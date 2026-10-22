@@ -77,14 +77,14 @@ cd ..
 ### 4. Python speech service
 
 ```powershell
-cd ai-services
+cd server\ai-services
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r requirements.txt
 python -m pip install git+https://github.com/huggingface/parler-tts.git
-cd ..
+cd ..\..
 ```
 
 If the Parler-TTS git install fails, the service still starts and falls back to `facebook/mms-tts-mal`.
@@ -124,7 +124,7 @@ npm run dev
 **Terminal 3 — Python speech**
 
 ```powershell
-cd ai-services
+cd server\ai-services
 .\.venv\Scripts\Activate.ps1
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```

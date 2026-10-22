@@ -2,7 +2,7 @@
 node_modules/
 client/node_modules/
 server/node_modules/
-ai-services/.venv/
+server/ai-services/.venv/
 .venv/
 venv/
 
@@ -22,8 +22,8 @@ __pycache__/
 *.bin
 *.onnx
 *.gguf
-ai-services/models/cache/
-ai-services/tmp/
+server/ai-services/models/cache/
+server/ai-services/tmp/
 uploads/
 tmp/
 *.wav

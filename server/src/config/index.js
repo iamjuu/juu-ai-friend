@@ -22,8 +22,8 @@ const config = {
   ),
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   geminiModel: (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').replace(/^models\//, ''),
-  geminiTtsModel: (process.env.GEMINI_TTS_MODEL || 'gemini-2.5-flash-preview-tts').replace(/^models\//, ''),
-  geminiTtsFallbacks: (process.env.GEMINI_TTS_FALLBACKS || 'gemini-2.5-flash-preview-tts,gemini-3.8-flash-tts,gemini-3.8-flash-lite-tts')
+  geminiTtsModel: (process.env.GEMINI_TTS_MODEL || 'gemini-3.8-flash-tts').replace(/^models\//, ''),
+  geminiTtsFallbacks: (process.env.GEMINI_TTS_FALLBACKS || 'gemini-3.8-flash-tts,gemini-2.5-pro-preview-tts,gemini-2.5-flash-preview-tts,gemini-3.8-flash-lite-tts')
     .split(',')
     .map((name) => name.trim().replace(/^models\//, ''))
     .filter(Boolean),

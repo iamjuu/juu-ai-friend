@@ -6,15 +6,15 @@ const EDGE_VOICES = {
   Harish: 'ml-IN-MidhunNeural',
 };
 
-const STYLE_SSML = {
-  caring: { rate: '-18%', pitch: '-3Hz', volume: 'soft' },
-  calm: { rate: '-20%', pitch: '-5Hz', volume: 'soft' },
-  happy: { rate: '+16%', pitch: '+10Hz', volume: '+16%' },
-  excited: { rate: '+22%', pitch: '+14Hz', volume: '+20%' },
-  sympathetic: { rate: '-16%', pitch: '-7Hz', volume: 'soft' },
-  friendly: { rate: '+10%', pitch: '+8Hz', volume: '+12%' },
-  reassuring: { rate: '-8%', pitch: '+2Hz', volume: '+8%' },
-  neutral: { rate: '+4%', pitch: '+3Hz', volume: 'medium' },
+const STYLE_PROSODY = {
+  caring: { rate: 0.9, pitch: '+1Hz', volume: 100 },
+  calm: { rate: 0.88, pitch: '+0Hz', volume: 100 },
+  happy: { rate: 1.03, pitch: '+3Hz', volume: 100 },
+  excited: { rate: 1.06, pitch: '+4Hz', volume: 100 },
+  sympathetic: { rate: 0.89, pitch: '+0Hz', volume: 100 },
+  friendly: { rate: 0.94, pitch: '+3Hz', volume: 100 },
+  reassuring: { rate: 0.91, pitch: '+1Hz', volume: 100 },
+  neutral: { rate: 0.95, pitch: '+1Hz', volume: 100 },
 };
 
 function escapeXml(text) {
@@ -29,6 +29,7 @@ function speakableMalayalam(text) {
   return String(text || '')
     .replace(/[\u{1F300}-\u{1FAFF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
     .replace(/[❤️❤🥰😊😉😜🫂😍😘]/g, '')
+    .replace(/[*_`#]+/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -37,26 +38,32 @@ function collectStream(stream) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('close', () => resolve(Buffer.concat(chunks)));
+    stream.on('end', () => {
+      const buffer = Buffer.concat(chunks);
+      if (!buffer.length) {
+        reject(new Error('Empty Malayalam speech'));
+        return;
+      }
+      resolve(buffer);
+    });
     stream.on('error', reject);
   });
 }
 
-function buildSsml(voiceName, spoken, speakingStyle) {
-  const mood = STYLE_SSML[speakingStyle] || STYLE_SSML.friendly;
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="ml-IN"><voice name="${voiceName}"><prosody rate="${mood.rate}" pitch="${mood.pitch}" volume="${mood.volume}">${escapeXml(spoken)}</prosody></voice></speak>`;
-}
-
-async function runSsml(voiceName, ssml) {
+async function runEdge(spoken, voiceName, mood, expressive) {
   const tts = new MsEdgeTTS();
-  await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, {
-    voiceLocale: 'ml-IN',
-  });
-  const { audioStream } = tts.rawToStream(ssml);
-  const buffer = await collectStream(audioStream);
-  tts.close();
-  return buffer;
+  try {
+    await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, {
+      voiceLocale: 'ml-IN',
+    });
+    const input = expressive
+      ? `<mstts:express-as style="chat" styledegree="1.3">${escapeXml(spoken)}</mstts:express-as>`
+      : escapeXml(spoken);
+    const { audioStream } = tts.toStream(input, mood);
+    return await collectStream(audioStream);
+  } finally {
+    tts.close();
+  }
 }
 
 async function synthesizeMalayalam({ text, voice, speakingStyle }) {
@@ -68,10 +75,13 @@ async function synthesizeMalayalam({ text, voice, speakingStyle }) {
   }
 
   const voiceName = EDGE_VOICES[voice] || EDGE_VOICES.Anjali;
-  const buffer = await runSsml(voiceName, buildSsml(voiceName, spoken, speakingStyle));
-
-  if (!buffer.length) {
-    throw new Error('Empty Malayalam speech');
+  const mood = STYLE_PROSODY[speakingStyle] || STYLE_PROSODY.friendly;
+  let buffer;
+  try {
+    buffer = await runEdge(spoken, voiceName, mood, true);
+  } catch (err) {
+    console.warn('Chat-style Malayalam voice failed, using natural neural voice:', err.message);
+    buffer = await runEdge(spoken, voiceName, mood, false);
   }
 
   return {
